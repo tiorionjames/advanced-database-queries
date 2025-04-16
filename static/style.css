@@ -1,0 +1,41 @@
+body {
+    background-color: #999;
+}
+
+main {
+    width: 80%;
+    margin: 2em auto;
+    padding: 2em;
+    background-color: #ccc;
+}
+
+.field-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.field-container-row {
+    display: flex;
+}
+
+.entry {
+    display: flex;
+    justify-content: space-between;
+    width: 80%;
+    margin: 1em auto;
+}
+
+input {
+    width: 30em;
+}
+
+textarea {
+    width: 30em;
+    height: 20em;
+    margin-bottom: 2em;
+}
+
+.label {
+    font-weight: bold;
+    padding-right: 0.5em;
+}
