@@ -1,75 +1,64 @@
 from sqlalchemy import create_engine, Column, Integer, String, Date
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from datetime import datetime
-from sqlalchemy.orm import Session
-from db import SessionLocal
 
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:postgres@localhost/journal"
+DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/journal"
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
 
 class Entry(Base):
-    __tablename__ = "entries"
+    __tablename__ = "entry"
 
     id = Column(Integer, primary_key=True, index=True)
     posted_date = Column(Date, nullable=False)
     title = Column(String, nullable=False)
     body = Column(String, nullable=False)
 
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "posted_date": self.posted_date.isoformat(),
+            "title": self.title,
+            "body": self.body,
+        }
+
+
+# create tables if they don't exist
+Base.metadata.create_all(bind=engine)
+
 
 def get_all_entries() -> list[dict]:
-    db = SessionLocal()
+    db: Session = SessionLocal()
     try:
-        entries = db.query(Entry).all()
-        return [
-            {
-                "id": e.id,
-                "posted_date": e.posted_date.isoformat(),
-                "title": e.title,
-                "body": e.body,
-            }
-            for e in entries
-        ]
+        return [entry.to_dict() for entry in db.query(Entry).all()]
+    finally:
+        db.close()
+
+
+def add_entry(entry_data: dict) -> dict:
+    db: Session = SessionLocal()
+    try:
+        entry = Entry(
+            posted_date=datetime.fromisoformat(entry_data["posted_date"]).date(),
+            title=entry_data["title"],
+            body=entry_data["body"],
+        )
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+        return entry.to_dict()
     finally:
         db.close()
 
 
 def get_entry(entry_id: int) -> dict | None:
-    db = SessionLocal()
+    db: Session = SessionLocal()
     try:
-        e = db.query(Entry).filter(Entry.id == entry_id).first()
-        if not e:
-            return None
-        return {
-            "id": e.id,
-            "posted_date": e.posted_date.isoformat(),
-            "title": e.title,
-            "body": e.body,
-        }
-    finally:
-        db.close()
-
-
-def add_entry(data: dict) -> dict:
-    db = SessionLocal()
-    try:
-        entry = Entry(
-            posted_date=datetime.fromisoformat(data["posted_date"]).date(),
-            title=data["title"],
-            body=data["body"],
-        )
-        db.add(entry)
-        db.commit()
-        db.refresh(entry)
-        return {
-            "id": entry.id,
-            "posted_date": entry.posted_date.isoformat(),
-            "title": entry.title,
-            "body": entry.body,
-        }
+        entry = db.query(Entry).filter(Entry.id == entry_id).first()
+        return entry.to_dict() if entry else None
     finally:
         db.close()
 
@@ -77,7 +66,7 @@ def add_entry(data: dict) -> dict:
 def delete_entry(entry_id: int) -> bool:
     db: Session = SessionLocal()
     try:
-        entry = db.query(JournalEntry).get(entry_id)
+        entry = db.query(Entry).filter(Entry.id == entry_id).first()
         if entry is None:
             return False
         db.delete(entry)
@@ -87,17 +76,20 @@ def delete_entry(entry_id: int) -> bool:
         db.close()
 
 
-def update_entry(entry_id: int, data: dict):
+def update_entry(entry_id: int, data: dict) -> dict | None:
     db: Session = SessionLocal()
     try:
-        entry = db.query(JournalEntry).get(entry_id)
+        entry = db.query(Entry).filter(Entry.id == entry_id).first()
         if entry is None:
             return None
-        for field, value in data.items():
-            if hasattr(entry, field):
-                setattr(entry, field, value)
+        if "posted_date" in data:
+            entry.posted_date = datetime.fromisoformat(data["posted_date"]).date()
+        if "title" in data:
+            entry.title = data["title"]
+        if "body" in data:
+            entry.body = data["body"]
         db.commit()
         db.refresh(entry)
-        return entry
+        return entry.to_dict()
     finally:
         db.close()
